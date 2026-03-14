@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  password     String
+  name         String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  clients      Client[]
+}
+
+model Client {
+  id           String        @id @default(uuid())
+  name         String
+  phone        String?
+  email        String?
+  company      String?
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  userId       String
+  user         User          @relation(fields: [userId], references: [id])
+
+  interactions Interaction[]
+  followUps    FollowUp[]
+  vehicles     Vehicle[]
+}
+
+model Interaction {
+  id           String        @id @default(uuid())
+  type         String        // "call" | "meeting" | "message"
+  summary      String
+  date         DateTime
+  createdAt    DateTime      @default(now())
+
+  clientId     String
+  client       Client        @relation(fields: [clientId], references: [id])
+}
+
+model FollowUp {
+  id           String        @id @default(uuid())
+  description  String
+  dueDate      DateTime
+  completed    Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+
+  clientId     String
+  client       Client        @relation(fields: [clientId], references: [id])
+}
+
+model Vehicle {
+  id           String        @id @default(uuid())
+  brand        String
+  model        String
+  year         Int?
+  interest     String?       // "compra" | "venta" | "service"
+
+  clientId     String
+  client       Client        @relation(fields: [clientId], references: [id])
+}
