@@ -10,6 +10,9 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  BadRequestException,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,6 +20,8 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
+  ApiBody,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -24,6 +29,8 @@ import { AuthenticatedUser } from '../common/interfaces/authenticated-user';
 import { ClientsService } from './clients.service';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 
 @ApiTags('Clientes')
 @ApiBearerAuth()
@@ -89,5 +96,57 @@ export class ClientsController {
   @ApiResponse({ status: 404, description: 'Cliente no encontrado' })
   remove(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.clientsService.remove(user.id, id);
+  }
+
+  @Post('import')
+  @ApiOperation({
+    summary: 'Importar clientes desde archivo CSV o Excel',
+    description:
+      'El archivo debe tener columnas: name (obligatorio), email, phone, company, notes',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Archivo .csv o .xlsx',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Importación completada' })
+  @ApiResponse({ status: 400, description: 'Archivo inválido o vacío' })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        const allowed = [
+          'text/csv',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.ms-excel',
+        ];
+        if (allowed.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(
+            new BadRequestException('Solo se permiten archivos CSV o Excel'),
+            false,
+          );
+        }
+      },
+    }),
+  )
+  importClients(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No se recibió ningún archivo');
+    }
+    return this.clientsService.importFromFile(user.id, file);
   }
 }
